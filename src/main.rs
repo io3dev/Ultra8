@@ -1,5 +1,7 @@
 mod cpu;
 
+const SCALE: i32 = 6;
+
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -19,7 +21,7 @@ fn main() {
     
 
     let (mut rl, thread) = raylib::init()
-        .size(640, 480)
+        .size(64 * SCALE, 32 * SCALE)
         .title("Ultra8")
         .build();
 
@@ -33,10 +35,10 @@ fn main() {
         for y in 0..32 {
             for x in 0..64 {
                 if gfx[(x + (y * 64)) as usize] == 1 {
-                    let pix_y = y * 8;
-                    let pix_x = x * 8;
+                    let pix_y = y * SCALE;
+                    let pix_x = x * SCALE;
                     
-                    d.draw_rectangle(pix_x, pix_y, 8, 8, Color::WHITE);
+                    d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::WHITE);
                 }
 
             }
