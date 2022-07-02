@@ -4,8 +4,8 @@ A chip8 emulator/interpreter with planned SCHIP and maybe XO-Chip intergration, 
 
 # Todo
 
-[ ] All opcodes
+- [ ] All opcodes
 
-[ ] SCHIP
+- [ ] SCHIP
 
-[ ] XO-CHIP
+- [ ] XO-CHIP
