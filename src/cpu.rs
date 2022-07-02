@@ -80,6 +80,7 @@ impl Cpu {
 					0x33 => self.ins_F033(),
 					0x55 => self.ins_F055(),
 					0x65 => self.ins_F065(),
+					0x1E => self.ins_0xF01E(),
 					_ => {}
 				}
 			}
@@ -354,6 +355,11 @@ impl Cpu {
 		for i in 0..self.get_vx() + 1 {
 			self.v[i as usize] = self.mem[(self.index + i) as usize];
 		}
+		self.pc += 2;
+	}
+
+	fn ins_0xF01E(&mut self) {
+		self.index += self.v[self.get_vx() as usize] as u16;
 		self.pc += 2;
 	}
 }
