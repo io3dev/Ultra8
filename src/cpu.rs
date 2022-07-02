@@ -73,7 +73,16 @@ impl Cpu {
 			0x9000 => self.ins_0x9000(),
 
 			0xA000 => self.ins_0xA000(),
+			0xB000 => self.ins_0xB000(),
 			0xD000 => self.ins_D000(),
+			0xF000 => {
+				match self.opcode & 0x00FF {
+					0x33 => self.ins_F033(),
+					0x55 => self.ins_F055(),
+					0x65 => self.ins_F065(),
+					_ => {}
+				}
+			}
 			0x8000 => {
 				match self.opcode & 0x000F {
 					0x0 => self.ins_0x8000(),
@@ -226,6 +235,8 @@ impl Cpu {
 	}
 
 	fn ins_0x8004(&mut self) {
+		// We convert the result in 16 bits to detect if it goes past 8 bits, and if it does
+		// set the appropriate flag
 		let result = (self.v[self.get_vx() as usize]) as u16 + (self.v[self.get_vy() as usize]) as u16;
 		if result > 255 {
 			self.v[0xF] = 1;
@@ -250,11 +261,22 @@ impl Cpu {
 		self.pc += 2;
 	}
 
-	fn ins_0x8006(&mut self) {}
+	fn ins_0x8006(&mut self) {
+		let vy = self.v[self.get_vy() as usize];
+		self.v[self.get_vx() as usize] &= 0x1;
+		self.v[self.get_vx() as usize] = (vy >> 1);
+		self.pc += 2;
+	}
 
 	fn ins_0x8007(&mut self) {}
 
-	fn ins_0x800E(&mut self) {}
+	fn ins_0x800E(&mut self) {
+		//v[0xF] = (v[x] shr 7)
+		let vy = self.v[self.get_vy() as usize];
+		self.v[0xF] = (self.v[self.get_vx() as usize] >> 7);
+		self.v[self.get_vx() as usize] = vy << 1;
+		self.pc += 2;
+	}
 
 	fn ins_0x9000(&mut self) {
 		let vx = self.v[self.get_vx() as usize];
@@ -270,6 +292,10 @@ impl Cpu {
 	fn ins_0xA000(&mut self) {
 		self.index = self.get_nnn();
 		self.pc += 2;
+	}
+
+	fn ins_0xB000(&mut self) {
+		self.pc = self.get_nnn() + self.v[0] as u16;
 	}
 
 	fn ins_D000(&mut self) {
@@ -304,6 +330,32 @@ impl Cpu {
 
 		self.pc += 2;
 	}
+
+	fn ins_F033(&mut self) {
+		let vx = self.v[self.get_vx() as usize];
+		let vy = self.v[self.get_vy() as usize];
+		let i = self.index as usize;
+
+		self.mem[i] = vx / 100;
+		self.mem[i + 1] = (vx / 10) % 10;
+		self.mem[i + 2] = (vx % 100) % 10;
+		self.pc += 2;
+	}
+
+	fn ins_F055(&mut self) {
+		for i in 0..self.get_vx() + 1 {
+			self.mem[(self.index + i) as usize] = self.v[i as usize];
+			
+		}
+		self.pc += 2;
+	}
+
+	fn ins_F065(&mut self) {
+		for i in 0..self.get_vx() + 1 {
+			self.v[i as usize] = self.mem[(self.index + i) as usize];
+		}
+		self.pc += 2;
+	}
 }
 
 // Misc functions
@@ -311,17 +363,4 @@ impl Cpu {
 	pub fn get_graphics(&self) -> [u8; 64 * 32] {
 		self.display
 	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-    #[test]
-    fn stack_test() {
-    	let mut c8 = Cpu::init();
-
-    	c8.stack_push(0x10);
-
-    	assert!(c8.stack_pop() == 0x10);
-    }
 }
