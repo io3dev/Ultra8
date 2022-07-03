@@ -2,6 +2,30 @@ const MEMSIZE: usize = 4096;
 
 const PROGRAM_START: usize = 0x200;
 
+const SCREEN_WIDTH: usize = 64;
+const SCREEN_HEIGHT: usize = 32;
+
+const FONTS: [u8; 80] = [
+  0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+  0x20, 0x60, 0x20, 0x20, 0x70, // 1
+  0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+  0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+  0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+  0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+  0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+  0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+  0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+  0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+  0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+  0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+  0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+  0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+  0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+  0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+];
+
+use rand::Rng;
+
 pub struct Cpu {
 	v: [u8; 16],
 	index: u16,
@@ -13,8 +37,13 @@ pub struct Cpu {
 
 	opcode: u16,
 
-	pub display: [u8; 64 * 32],
+	pub display: [u8; SCREEN_WIDTH * SCREEN_HEIGHT],
+
+	pub keypad: [bool; 16],
+
 	stack: [u16; 16],
+
+	dt: u8,
 }
 
 impl Cpu {
@@ -30,14 +59,23 @@ impl Cpu {
 
 			index: 0,
 
-			display: [0; 64 * 32],
+			display: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
+			keypad: [false; 16],
 			stack: [0;16],
+
+			dt: 0,
 		}
 	}
 
 	pub fn load(&mut self, content: &[u8]) {
+		// Load rom into memory
 		for i in 0..content.len() {
 			self.mem[i + PROGRAM_START] = content[i];
+		}
+
+		// Also loads fonts aswell
+		for i in 0..FONTS.len() {
+			self.mem[i] = FONTS[i];
 		}
 	}
 
@@ -46,12 +84,11 @@ impl Cpu {
 		let b = self.mem[(self.pc + 1) as usize];
 
 		self.opcode = (((a as u16) << 8) | b as u16) as u16;
-
-		println!("{:#2x}", self.opcode);
 	}
 
 	pub fn cycle(&mut self) {
 		println!("{:#2x}", self.opcode);
+		println!("{:#?}", self.keypad);
 		self.fetch();
 
 		match self.opcode & 0xF000 {
@@ -74,13 +111,34 @@ impl Cpu {
 
 			0xA000 => self.ins_0xA000(),
 			0xB000 => self.ins_0xB000(),
+			0xC000 => {
+				let mut rng = rand::thread_rng();
+				self.v[self.get_vx() as usize] = rng.gen_range(0..255) & self.get_nn();
+				self.pc += 2;
+			}
 			0xD000 => self.ins_D000(),
+			0xE000 => {
+				match self.opcode & 0x00FF {
+					0x9E => self.ins_0xE9E(),
+					0xA1 => self.ins_0xEXA1(),
+					_ => {}
+				}
+			}
 			0xF000 => {
 				match self.opcode & 0x00FF {
+					0x07 => {
+						self.v[self.get_vx() as usize] = self.dt;
+						self.pc += 2;
+					}
 					0x33 => self.ins_F033(),
 					0x55 => self.ins_F055(),
 					0x65 => self.ins_F065(),
 					0x1E => self.ins_0xF01E(),
+					0x0A => self.ins_0xF00A(),
+					0x15 => {
+						self.dt = self.get_vx() as u8;
+						self.pc += 2;
+					}
 					_ => {}
 				}
 			}
@@ -128,17 +186,14 @@ impl Cpu {
 
 // Stack functions
 impl Cpu {
-	// fn stack_pop(&mut self) -> u16 {
-
-		
-
-	// 	self.stack[self.sp as usize]
-	// 	self.sp -= 1;
-	// }
+	fn stack_pop(&mut self) -> u16 {
+		self.sp -= 1;
+		self.stack[self.sp as usize]
+	}
 
 	fn stack_push(&mut self, value: u16) {
-		self.sp += 1;
 		self.stack[self.sp as usize] = value;
+		self.sp += 1;
 	}
 }
 
@@ -151,11 +206,8 @@ impl Cpu {
 	}
 
 	fn ins_0x00EE(&mut self) {
-		//self.stack[self.sp as usize] = self.pc;
-		//self.sp -= 1;
-		self.pc = self.stack[self.sp as usize] + 2;
-
-		//self.pc = self.stack[sp] + 2;
+		self.pc = self.stack_pop();
+		self.pc += 2;
 	}
 
 	fn ins_0x1000(&mut self) {
@@ -164,8 +216,8 @@ impl Cpu {
 
 	fn ins_0x2000(&mut self) {
 		self.stack_push(self.pc);
+
 		self.pc = self.get_nnn();
-		//self.pc += 2;
 	}
 
 	fn ins_0x3000(&mut self) {
@@ -178,10 +230,9 @@ impl Cpu {
 
 	fn ins_0x4000(&mut self) {
 		if self.v[self.get_vx() as usize] != self.get_nn() {
-			self.pc += 4;
-		} else {
 			self.pc += 2;
 		}
+		self.pc += 2;
 	}
 
 	fn ins_0x5000(&mut self) {
@@ -263,18 +314,33 @@ impl Cpu {
 	}
 
 	fn ins_0x8006(&mut self) {
-		let vy = self.v[self.get_vy() as usize];
-		self.v[self.get_vx() as usize] &= 0x1;
-		self.v[self.get_vx() as usize] = (vy >> 1);
+		let vx = self.get_vx() as usize;
+		self.v[0xF] = self.v[vx] & 0x1;
+		self.v[vx] >>= 1;
 		self.pc += 2;
+
 	}
 
-	fn ins_0x8007(&mut self) {}
+	fn ins_0x8007(&mut self) {
+		//let result = (self.v[self.get_vx() as usize]) as u16 - (self.v[self.get_vy() as usize]) as u16;
+		let vx = self.v[self.get_vx() as usize];
+		if (self.v[self.get_vx() as usize]) > (self.v[self.get_vy() as usize]) {
+			self.v[0xF] = 0;
+		} else {
+			self.v[0xF] = 1;
+		}
+
+		self.v[self.get_vx() as usize] = self.v[self.get_vy() as usize].wrapping_sub(vx);
+		println!("{}",self.v[self.get_vy() as usize]);
+		//self.v[self.get_vx() as usize] = self.v[self.get_vy() as usize] - self.v[self.get_vx() as usize];
+
+		self.pc += 2;
+	}
 
 	fn ins_0x800E(&mut self) {
 		//v[0xF] = (v[x] shr 7)
 		let vy = self.v[self.get_vy() as usize];
-		self.v[0xF] = (self.v[self.get_vx() as usize] >> 7);
+		self.v[0xF] = self.v[self.get_vx() as usize] >> 7;
 		self.v[self.get_vx() as usize] = vy << 1;
 		self.pc += 2;
 	}
@@ -332,6 +398,7 @@ impl Cpu {
 		self.pc += 2;
 	}
 
+
 	fn ins_F033(&mut self) {
 		let vx = self.v[self.get_vx() as usize];
 		let vy = self.v[self.get_vy() as usize];
@@ -362,11 +429,67 @@ impl Cpu {
 		self.index += self.v[self.get_vx() as usize] as u16;
 		self.pc += 2;
 	}
+
+	fn ins_0xE9E(&mut self) {
+
+	}
+
+	fn ins_0xEXA1(&mut self) {
+		//self.pc += 4;
+		let vx = self.get_vx() as usize;
+
+		if self.keypad[(self.v[vx]) as usize] == false {
+			self.pc += 4;
+		} else {
+			self.pc += 2;
+		}
+	}
+
+	fn ins_0xF00A(&mut self) {
+		let mut pressed = false;
+		let vx = self.get_vx() as usize;
+
+		for i in 0..self.keypad.len() {
+			if self.keypad[i] == true {
+				self.v[vx as usize] = i as u8;
+				pressed = true;
+			}
+		}
+		if pressed {
+			self.pc += 2;
+		}
+	}
+
+
+
+
+}
+
+// XO-Chip Instructions
+
+// http://johnearnest.github.io/Octo/docs/XO-ChipSpecification.html
+
+impl Cpu {
+	fn ins_05XY2(&mut self){
+
+	}
 }
 
 // Misc functions
 impl Cpu {
 	pub fn get_graphics(&self) -> [u8; 64 * 32] {
 		self.display
+	}
+
+	pub fn load_byte_to_memory(&mut self, v: u8, pos: usize) {
+		self.mem[pos] = v;
+	}
+}
+
+// Keyboard instructions
+impl Cpu {
+	pub fn set_key(&mut self, key: u8, pressed: bool) {
+		self.keypad[key as usize] = pressed;
+
 	}
 }

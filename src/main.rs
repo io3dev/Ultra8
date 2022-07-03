@@ -1,11 +1,17 @@
 mod cpu;
 
-const SCALE: i32 = 6;
+const SCALE: i32 = 7;
 
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use raylib::prelude::*;
+use raylib::consts::KeyboardKey::*;
+
+const KEYS: [KeyboardKey; 2] = [
+    KEY_X,
+    KEY_ONE,
+];
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,6 +24,7 @@ fn main() {
 
     let mut c8 = cpu::Cpu::init();
     c8.load(&buf);
+    c8.load_byte_to_memory(3, 0x1FF);
     
 
     let (mut rl, thread) = raylib::init()
@@ -27,9 +34,20 @@ fn main() {
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
+        if d.is_key_pressed(KEY_SPACE) {
+            c8.cycle();
+        }
         c8.cycle();
-        d.clear_background(Color::BLACK);
-
+        d.clear_background(Color::GREEN);
+        if d.is_key_down(KEYS[1]) {
+            //panic!();
+        }
+        let mut pressed = false;
+        for i in 0..KEYS.len() {
+            if d.is_key_down(KEYS[i]) {
+                c8.set_key(1, true);
+            }
+        }
 
         let gfx = c8.get_graphics();
         for y in 0..32 {
@@ -38,9 +56,8 @@ fn main() {
                     let pix_y = y * SCALE;
                     let pix_x = x * SCALE;
                     
-                    d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::WHITE);
+                    d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::BLACK);
                 }
-
             }
         }
     }
