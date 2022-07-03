@@ -24,7 +24,8 @@ fn main() {
 
     let mut c8 = cpu::Cpu::init();
     c8.load(&buf);
-    c8.load_byte_to_memory(3, 0x1FF);
+    c8.load_byte_to_memory(4, 0x1FF);
+    //c8.load_byte_to_memory(1, 0x1FE);
     
 
     let (mut rl, thread) = raylib::init()

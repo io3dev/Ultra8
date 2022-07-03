@@ -315,33 +315,35 @@ impl Cpu {
 
 	fn ins_0x8006(&mut self) {
 		let vx = self.get_vx() as usize;
-		self.v[0xF] = self.v[vx] & 0x1;
-		self.v[vx] >>= 1;
+
+		self.v[0xF] = self.v[vx] & 1;
+		self.v[vx] = self.v[vx] >> 1;
+
 		self.pc += 2;
 
 	}
 
 	fn ins_0x8007(&mut self) {
-		//let result = (self.v[self.get_vx() as usize]) as u16 - (self.v[self.get_vy() as usize]) as u16;
-		let vx = self.v[self.get_vx() as usize];
-		if (self.v[self.get_vx() as usize]) > (self.v[self.get_vy() as usize]) {
-			self.v[0xF] = 0;
-		} else {
-			self.v[0xF] = 1;
+		let vx = self.get_vx() as usize;
+		let vy = self.get_vy() as usize;
+		let (result, overflow) = self.v[vy].overflowing_sub(self.v[vx]);
+		self.v[vx] = result;
+		match overflow {
+			true => self.v[0xF] = 0,
+			false => self.v[0xF] = 1,
 		}
-
-		self.v[self.get_vx() as usize] = self.v[self.get_vy() as usize].wrapping_sub(vx);
-		println!("{}",self.v[self.get_vy() as usize]);
-		//self.v[self.get_vx() as usize] = self.v[self.get_vy() as usize] - self.v[self.get_vx() as usize];
-
 		self.pc += 2;
 	}
 
 	fn ins_0x800E(&mut self) {
 		//v[0xF] = (v[x] shr 7)
-		let vy = self.v[self.get_vy() as usize];
-		self.v[0xF] = self.v[self.get_vx() as usize] >> 7;
-		self.v[self.get_vx() as usize] = vy << 1;
+		// let vy = self.v[self.get_vy() as usize];
+		// self.v[0xF] = self.v[self.get_vx() as usize] >> 7;
+		// self.v[self.get_vx() as usize] = vy << 1;
+		// self.pc += 2;
+		let vx = self.get_vx() as usize;
+		self.v[0xF] = self.v[vx] >> 7;
+		self.v[vx] = self.v[vx] << 1;
 		self.pc += 2;
 	}
 
