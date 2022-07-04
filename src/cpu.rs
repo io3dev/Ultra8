@@ -25,6 +25,8 @@ const FONTS: [u8; 80] = [
 ];
 
 use rand::Rng;
+use std::thread;
+use std::time::Duration;
 
 pub struct Cpu {
 	v: [u8; 16],
@@ -39,7 +41,10 @@ pub struct Cpu {
 
 	pub display: [u8; SCREEN_WIDTH * SCREEN_HEIGHT],
 
-	pub keypad: [bool; 16],
+	pub keypad: [u8; 16],
+	pub keypressed: bool,
+
+	pub draw: bool,
 
 	stack: [u16; 16],
 
@@ -60,8 +65,10 @@ impl Cpu {
 			index: 0,
 
 			display: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
-			keypad: [false; 16],
+			keypad: [0; 16],
+			keypressed: false,
 			stack: [0;16],
+			draw: false,
 
 			dt: 0,
 		}
@@ -88,8 +95,8 @@ impl Cpu {
 
 	pub fn cycle(&mut self) {
 		println!("{:#2x}", self.opcode);
-		println!("{:#?}", self.keypad);
 		self.fetch();
+		dbg!(self.keypad);
 
 		match self.opcode & 0xF000 {
 			0x0000 => {
@@ -121,7 +128,7 @@ impl Cpu {
 				match self.opcode & 0x00FF {
 					0x9E => self.ins_0xE9E(),
 					0xA1 => self.ins_0xEXA1(),
-					_ => {}
+					_ => unimplemented!("Opcode {:#2x}", self.opcode),
 				}
 			}
 			0xF000 => {
@@ -130,6 +137,8 @@ impl Cpu {
 						self.v[self.get_vx() as usize] = self.dt;
 						self.pc += 2;
 					}
+					0x18 => self.pc += 2,
+					0x29 => self.ins_0xF029(),
 					0x33 => self.ins_F033(),
 					0x55 => self.ins_F055(),
 					0x65 => self.ins_F065(),
@@ -139,7 +148,7 @@ impl Cpu {
 						self.dt = self.get_vx() as u8;
 						self.pc += 2;
 					}
-					_ => {}
+					_ => unimplemented!("Opcode {:#2x}", self.opcode),
 				}
 			}
 			0x8000 => {
@@ -153,12 +162,18 @@ impl Cpu {
 					0x6 => self.ins_0x8006(),
 					0x7 => self.ins_0x8007(),
 					0xE => self.ins_0x800E(),
-					_ => {}//unimplemented!("Opcode {:#2x}", self.opcode),
+					_ => unimplemented!("Opcode {:#2x}", self.opcode),
 				}
 			}
 
-			_ => {}//unimplemented!("Opcode {:#2x}", self.opcode),
+			_ => unimplemented!("Opcode {:#2x}", self.opcode),
 		}
+		println!("{}", self.dt);
+		if self.dt != 0 {
+			self.dt -= 1;
+		}
+
+
 	}
 }
 
@@ -202,6 +217,7 @@ impl Cpu {
 impl Cpu {
 	fn ins_0x00E0(&mut self) {
 		self.display = [0; 64 * 32];
+		self.draw = true;
 		self.pc += 2;
 	}
 
@@ -315,10 +331,11 @@ impl Cpu {
 
 	fn ins_0x8006(&mut self) {
 		let vx = self.get_vx() as usize;
+		let vy = self.get_vy() as usize;
 
-		self.v[0xF] = self.v[vx] & 1;
-		self.v[vx] = self.v[vx] >> 1;
-
+		self.v[0xF] = self.v[vx] & 0x1;
+		self.v[vx] >>= 1;
+		self.v[vx] = self.v[vx] as u8;
 		self.pc += 2;
 
 	}
@@ -370,16 +387,16 @@ impl Cpu {
 	fn ins_D000(&mut self) {
 
 		let height = self.get_n();
-		let x = self.v[self.get_vx() as usize] % 64;
-		let y = self.v[self.get_vy() as usize] % 32;
+		let x = self.v[self.get_vx() as usize];
+		let y = self.v[self.get_vy() as usize];
 
 		self.v[0xF] = 0;
 		for yline in 0..height {
 			let pixel = self.mem[(self.index + yline) as usize];
 			for xline in 0..8 {
 				if pixel & (0x80 >> xline) != 0 {
-					let a = (x as u16 + xline) as u16;
-					let b = (y as u16 + yline) as u16;
+					let a = ((x as u16 + xline) as u32) % 64;
+					let b = ((y as u16 + yline) as u32) % 32;
 					if self.display[(a + (b * 64)) as usize] == 1 {
 						self.v[0xF] = 1;
 					}
@@ -396,7 +413,11 @@ impl Cpu {
 				}
 			}
 		}
-
+		self.draw = true;
+		self.pc += 2;
+	}
+	fn ins_0xF029(&mut self) {
+		self.index = (self.v[self.get_vx() as usize] * 0x5) as u16;
 		self.pc += 2;
 	}
 
@@ -433,14 +454,16 @@ impl Cpu {
 	}
 
 	fn ins_0xE9E(&mut self) {
-
+		if self.keypad[(self.v[self.get_vx() as usize]) as usize] != 0 {
+			self.pc += 4;
+		} else {
+			self.pc += 2;
+		}
 	}
 
 	fn ins_0xEXA1(&mut self) {
-		//self.pc += 4;
-		let vx = self.get_vx() as usize;
-
-		if self.keypad[(self.v[vx]) as usize] == false {
+		println!("K: {}", self.v[self.get_vx() as usize]);
+		if self.keypad[(self.v[self.get_vx() as usize]) as usize] == 0 {
 			self.pc += 4;
 		} else {
 			self.pc += 2;
@@ -448,16 +471,16 @@ impl Cpu {
 	}
 
 	fn ins_0xF00A(&mut self) {
-		let mut pressed = false;
+		self.keypressed = false;
 		let vx = self.get_vx() as usize;
-
-		for i in 0..self.keypad.len() {
-			if self.keypad[i] == true {
-				self.v[vx as usize] = i as u8;
-				pressed = true;
+		for i in 0..16 {
+			if self.keypad[i] == 1 {
+				self.keypressed = true;
+				self.v[vx] = i as u8;
 			}
 		}
-		if pressed {
+
+		if self.keypressed {
 			self.pc += 2;
 		}
 	}
@@ -490,7 +513,7 @@ impl Cpu {
 
 // Keyboard instructions
 impl Cpu {
-	pub fn set_key(&mut self, key: u8, pressed: bool) {
+	pub fn set_key(&mut self, key: u8, pressed: u8) {
 		self.keypad[key as usize] = pressed;
 
 	}
