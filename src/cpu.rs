@@ -1,3 +1,7 @@
+use std::thread;
+use std::time::Duration;
+use rand::Rng;
+
 const MEMSIZE: usize = 4096;
 
 const PROGRAM_START: usize = 0x200;
@@ -24,9 +28,12 @@ const FONTS: [u8; 80] = [
   0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 ];
 
-use rand::Rng;
-use std::thread;
-use std::time::Duration;
+#[derive(Debug)]
+enum video_mode {
+	SCHIP8,
+	CHIP8,
+}
+
 
 pub struct Cpu {
 	v: [u8; 16],
@@ -45,6 +52,8 @@ pub struct Cpu {
 	pub keypressed: bool,
 
 	pub draw: bool,
+
+	vmode: video_mode,
 
 	stack: [u16; 16],
 
@@ -65,6 +74,7 @@ impl Cpu {
 			index: 0,
 
 			display: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
+			vmode: video_mode::CHIP8,
 			keypad: [0; 16],
 			keypressed: false,
 			stack: [0;16],
@@ -94,15 +104,17 @@ impl Cpu {
 	}
 
 	pub fn cycle(&mut self) {
-		println!("{:#2x}", self.opcode);
 		self.fetch();
-		dbg!(self.keypad);
-
+		println!("OP: {:#2x}", self.opcode);
 		match self.opcode & 0xF000 {
 			0x0000 => {
 				match self.opcode & 0x00FF {
 					0xE0 => self.ins_0x00E0(),
 					0xEE => self.ins_0x00EE(),
+					// S-CHIP Instructions
+					0xFD => self.ins_0x00FD(),
+					0xFE => self.ins_0x00FE(),
+					0xFF => self.ins_0x00FF(),
 					_ => unimplemented!("Opcode {:#2x}", self.opcode),
 				}
 			}
@@ -168,9 +180,9 @@ impl Cpu {
 
 			_ => unimplemented!("Opcode {:#2x}", self.opcode),
 		}
-		println!("{}", self.dt);
 		if self.dt != 0 {
 			self.dt -= 1;
+			thread::sleep(Duration::from_millis(15));
 		}
 
 
@@ -225,6 +237,8 @@ impl Cpu {
 		self.pc = self.stack_pop();
 		self.pc += 2;
 	}
+
+
 
 	fn ins_0x1000(&mut self) {
 		self.pc = self.get_nnn();
@@ -385,35 +399,60 @@ impl Cpu {
 	}
 
 	fn ins_D000(&mut self) {
+		self.vmode = video_mode::CHIP8;
 
 		let height = self.get_n();
 		let x = self.v[self.get_vx() as usize];
 		let y = self.v[self.get_vy() as usize];
-
-		self.v[0xF] = 0;
-		for yline in 0..height {
-			let pixel = self.mem[(self.index + yline) as usize];
-			for xline in 0..8 {
-				if pixel & (0x80 >> xline) != 0 {
-					let a = ((x as u16 + xline) as u32) % 64;
-					let b = ((y as u16 + yline) as u32) % 32;
-					if self.display[(a + (b * 64)) as usize] == 1 {
-						self.v[0xF] = 1;
+		//println!("SAD {:?}", self.vmode);
+		match &self.vmode {
+			video_mode::CHIP8 => {
+				// Normal chip 8 rendering
+				self.v[0xF] = 0;
+				for yline in 0..height {
+					let pixel = self.mem[(self.index + yline) as usize];
+					for xline in 0..8 {
+						if pixel & (0x80 >> xline) != 0 {
+							let a = ((x as u16 + xline) as u32) % 64;
+							let b = ((y as u16 + yline) as u32) % 32;
+							if self.display[(a + (b * 64)) as usize] == 1 {
+								self.v[0xF] = 1;
+							}
+							self.display[(a + (b * 64)) as usize] ^= 1;
+						}
 					}
-					self.display[(a + (b * 64)) as usize] ^= 1;
-
-					// let a = ((x as u16).wrapping_add(xline)) as u16;
-					// let b = ((y as u16).wrapping_add(yline)) as u16;
-
-					// if self.display[a.wrapping_add(b.wrapping_mul(64)) as usize] == 1{
-
-					// }
-
-					// self.display[a.wrapping_add(b.wrapping_mul(64)) as usize] ^= 1;
 				}
+				self.draw = true;
+			}
+			video_mode::SCHIP8 => {
+				println!("USING CHPI8");
+				// Super chip 8 drawing
 			}
 		}
-		self.draw = true;
+		// self.v[0xF] = 0;
+		// for yline in 0..height {
+		// 	let pixel = self.mem[(self.index + yline) as usize];
+		// 	for xline in 0..8 {
+		// 		if pixel & (0x80 >> xline) != 0 {
+		// 			let a = ((x as u16 + xline) as u32) % 64;
+		// 			let b = ((y as u16 + yline) as u32) % 32;
+		// 			if self.display[(a + (b * 64)) as usize] == 1 {
+		// 				self.v[0xF] = 1;
+		// 			}
+		// 			self.display[(a + (b * 64)) as usize] ^= 1;
+
+		// 			// let a = ((x as u16).wrapping_add(xline)) as u16;
+		// 			// let b = ((y as u16).wrapping_add(yline)) as u16;
+
+		// 			// if self.display[a.wrapping_add(b.wrapping_mul(64)) as usize] == 1{
+
+		// 			// }
+
+		// 			// self.display[a.wrapping_add(b.wrapping_mul(64)) as usize] ^= 1;
+		// 		}
+		// 	}
+		// }
+		//self.draw = true;
 		self.pc += 2;
 	}
 	fn ins_0xF029(&mut self) {
@@ -462,7 +501,6 @@ impl Cpu {
 	}
 
 	fn ins_0xEXA1(&mut self) {
-		println!("K: {}", self.v[self.get_vx() as usize]);
 		if self.keypad[(self.v[self.get_vx() as usize]) as usize] == 0 {
 			self.pc += 4;
 		} else {
@@ -490,6 +528,24 @@ impl Cpu {
 
 }
 
+// Super chip 1.0 instructions
+
+impl Cpu {
+	fn ins_0x00FD(&self) {
+		std::process::exit(1);
+	}
+
+	fn ins_0x00FE(&mut self) {
+		self.set_mode(video_mode::CHIP8);
+		self.pc += 2;
+	}
+
+	fn ins_0x00FF(&mut self) {
+		self.set_mode(video_mode::SCHIP8);
+		self.pc += 2;
+	}
+}
+
 // XO-Chip Instructions
 
 // http://johnearnest.github.io/Octo/docs/XO-ChipSpecification.html
@@ -508,6 +564,10 @@ impl Cpu {
 
 	pub fn load_byte_to_memory(&mut self, v: u8, pos: usize) {
 		self.mem[pos] = v;
+	}
+
+	fn set_mode(&mut self, v: video_mode) {
+		self.vmode = v;
 	}
 }
 

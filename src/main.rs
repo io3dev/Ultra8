@@ -1,13 +1,15 @@
 mod cpu;
 
-const SCALE: i32 = 7;
-
 use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::thread;
+use std::time::Duration;
 use raylib::prelude::*;
 use raylib::consts::KeyboardKey::*;
 
+
+const SCALE: i32 = 7;
 const KEYS: [KeyboardKey; 16] = [
     KEY_X,
     KEY_ONE,
@@ -28,6 +30,7 @@ const KEYS: [KeyboardKey; 16] = [
 ];
 
 fn main() {
+    let sleep_duration = Duration::from_millis(1);
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 {
         panic!("No argument specified!");
@@ -43,21 +46,16 @@ fn main() {
     
 
     let (mut rl, thread) = raylib::init()
-        .size(64 * SCALE, 32 * SCALE)
+        .size(64 * SCALE, 32 * SCALE + 30)
         .title("Ultra8")
         .build();
 
-        //rl.set_target_fps(500);
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
-        if d.is_key_pressed(KEY_SPACE) {
-            //c8.set_key(14, true);
-        }
-        println!("{}", c8.keypressed);
+        d.draw_text("MACHINE: CHIP8", 20, 32 * SCALE + 10,20,Color::GREEN);
         c8.cycle();
-        d.clear_background(Color::GREEN);
-        let mut pressed = false;
+        d.clear_background(Color::BLACK);
         for i in 0..KEYS.len() {
             if d.is_key_down(KEYS[i]) {
                 c8.set_key(i as u8, 1);
@@ -73,12 +71,17 @@ fn main() {
                     if gfx[(x + (y * 64)) as usize] == 1 {
                         let pix_y = y * SCALE;
                         let pix_x = x * SCALE;
-                        d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::BLACK);
+                        d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::RED);
 
+                    } else {
+                        let pix_y = y * SCALE;
+                        let pix_x = x * SCALE;
+                        d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::DARKGRAY);
                     }
                 }
             }
         }
+        thread::sleep(sleep_duration);
 
     }
 }
