@@ -57,7 +57,7 @@ pub struct Cpu {
 
 	stack: [u16; 16],
 
-	dt: u8,
+	pub dt: u8,
 }
 
 impl Cpu {
@@ -179,10 +179,6 @@ impl Cpu {
 			}
 
 			_ => unimplemented!("Opcode {:#2x}", self.opcode),
-		}
-		if self.dt != 0 {
-			self.dt -= 1;
-			thread::sleep(Duration::from_millis(15));
 		}
 
 
@@ -425,7 +421,13 @@ impl Cpu {
 				self.draw = true;
 			}
 			video_mode::SCHIP8 => {
-				println!("USING CHPI8");
+				self.v[0xF] = 0;
+				for row in 0..16 {
+					for col in 0..16 {
+						// memory.data[cpu.I + 2 * row] << 8 | memory.data[cpu.I + 2 * row + 1];
+						//let sprite_row = self.mem[self.index + 2 * row] << 8 | self.mem[self.index + 2 * row + 1];
+					}
+				}
 				// Super chip 8 drawing
 			}
 		}

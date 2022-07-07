@@ -1,10 +1,11 @@
 mod cpu;
+mod cb_parser;
 
 use std::env;
 use std::fs::File;
 use std::io::Read;
-use std::thread;
-use std::time::Duration;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use raylib::prelude::*;
 use raylib::consts::KeyboardKey::*;
 
@@ -50,12 +51,12 @@ fn main() {
         .title("Ultra8")
         .build();
 
-
+    let mut updateonce = 0;
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
-        d.draw_text("MACHINE: CHIP8", 20, 32 * SCALE + 10,20,Color::GREEN);
-        c8.cycle();
+        d.draw_text("MACHINE: CHIP8", 20, 32 * SCALE + 10,20,Color::RED);
         d.clear_background(Color::BLACK);
+        c8.cycle();
         for i in 0..KEYS.len() {
             if d.is_key_down(KEYS[i]) {
                 c8.set_key(i as u8, 1);
@@ -63,6 +64,17 @@ fn main() {
                 c8.set_key(i as u8, 0)
             }
         }
+
+        let now = Instant::now();
+        //let delta = = now - 
+        if updateonce >= 16 {
+            updateonce = 0;
+            if c8.dt != 0 {
+                c8.dt -= 1;
+            }
+        }
+        updateonce += 1;
+        println!("ASDASD: {}", updateonce);
 
         let gfx = c8.get_graphics();
         if c8.draw {
@@ -76,12 +88,24 @@ fn main() {
                     } else {
                         let pix_y = y * SCALE;
                         let pix_x = x * SCALE;
-                        d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::DARKGRAY);
+                        d.draw_rectangle(pix_x, pix_y, SCALE, SCALE, Color::BLACK);
                     }
                 }
             }
         }
-        thread::sleep(sleep_duration);
+        sleep(Duration::new(0, 1_000_000 as u32))
 
     }
 }
+
+// mod cb_parser;
+// use std::fs::File;
+// use std::io::Read;
+// fn main() {
+//     let mut p = cb_parser::Parser::init();
+//     let mut f = File::open("i.c8b").unwrap();
+//     let mut buf = Vec::new();
+//     f.read_to_end(&mut buf).unwrap();
+//     p.open(&buf);
+//     println!("{:#?}", p.prog_start);
+// }
