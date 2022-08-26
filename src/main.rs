@@ -43,6 +43,8 @@ struct MyGame {
     egui_backend: EguiBackend,
 
     chip8_running: bool,
+
+    update_once: u16,
 }
 
 use std::env;
@@ -68,11 +70,14 @@ impl MyGame {
                 c8
             },
 
+            update_once: 0,
+
             egui_backend: EguiBackend::default(),
             chip8_running: true,
         }
     }
 }
+
 const SCALE: i32 = 7;
 impl EventHandler for MyGame {
     fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
@@ -94,6 +99,16 @@ impl EventHandler for MyGame {
             ui.label(format!("{:#?}", self.chip8.v));
         }
         );
+
+        if self.update_once >= 16 {
+            self.update_once = 0;
+            if self.chip8.dt != 0 {
+                self.chip8.dt -= 1;
+            }
+        }
+        self.update_once += 1;
+
+        self.chip8.dt -= 1;
         if self.chip8_running {
             self.chip8.cycle();
         }
@@ -102,6 +117,18 @@ impl EventHandler for MyGame {
             self.chip8.set_key(4,1);
         } else {
             self.chip8.set_key(4,0);
+        }
+
+        if ggez::input::keyboard::is_key_pressed(_ctx, KeyCode::E) {
+            self.chip8.set_key(6,1);
+        } else {
+            self.chip8.set_key(6,0);
+        }
+
+        if ggez::input::keyboard::is_key_pressed(_ctx, KeyCode::W) {
+            self.chip8.set_key(5,1);
+        } else {
+            self.chip8.set_key(5,0);
         }
 
         Ok(())
