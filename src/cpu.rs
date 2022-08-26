@@ -36,7 +36,7 @@ enum video_mode {
 
 
 pub struct Cpu {
-	v: [u8; 16],
+	pub v: [u8; 16],
 	index: u16,
 
 	mem: [u8; MEMSIZE],
@@ -88,6 +88,7 @@ impl Cpu {
 		// Load rom into memory
 		for i in 0..content.len() {
 			self.mem[i + PROGRAM_START] = content[i];
+			println!("{}", content[i]);
 		}
 
 		// Also loads fonts aswell
@@ -105,7 +106,7 @@ impl Cpu {
 
 	pub fn cycle(&mut self) {
 		self.fetch();
-		println!("OP: {:#2x}", self.opcode);
+		// println!("OP: {:#2x}", self.opcode);
 		match self.opcode & 0xF000 {
 			0x0000 => {
 				match self.opcode & 0x00FF {
@@ -421,13 +422,6 @@ impl Cpu {
 				self.draw = true;
 			}
 			video_mode::SCHIP8 => {
-				self.v[0xF] = 0;
-				for row in 0..16 {
-					for col in 0..16 {
-						// memory.data[cpu.I + 2 * row] << 8 | memory.data[cpu.I + 2 * row + 1];
-						//let sprite_row = self.mem[self.index + 2 * row] << 8 | self.mem[self.index + 2 * row + 1];
-					}
-				}
 				// Super chip 8 drawing
 			}
 		}
